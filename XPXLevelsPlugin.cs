@@ -417,7 +417,8 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         {
             return;
         }
-        ShowLevelOverview(player!);
+
+        OpenLevelOverviewMenu(player!);
     }
 
     [ConsoleCommand("css_rank", "Show your current XPX rank")]
@@ -429,7 +430,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             return;
         }
 
-        ShowRankOverview(player!);
+        OpenRankOverviewMenu(player!);
     }
 
     [ConsoleCommand("css_top", "Show the XPX leaderboard")]
@@ -440,7 +441,8 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         {
             return;
         }
-        ShowTopOverview(player!);
+
+        OpenTopOverviewMenu(player!);
     }
 
     [ConsoleCommand("css_help", "Show XPX help and progression info")]

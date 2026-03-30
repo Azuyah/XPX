@@ -172,38 +172,50 @@ public sealed partial class XPXLevelsPlugin
 
         if (!_weaponStatsBySteamId.ContainsKey(steamId))
         {
-            _weaponStatsBySteamId[steamId] = _repository.GetWeaponStats(steamId)
-                .Select(stat => new
+            var weaponStats = new Dictionary<string, WeaponStatProgress>(StringComparer.OrdinalIgnoreCase);
+            foreach (var storedStat in _repository.GetWeaponStats(steamId))
+            {
+                var weaponKey = NormalizeWeaponName(storedStat.WeaponName);
+                if (string.IsNullOrWhiteSpace(weaponKey))
                 {
-                    Key = NormalizeWeaponName(stat.WeaponName),
-                    Stat = stat
-                })
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
-                .GroupBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => new WeaponStatProgress
+                    continue;
+                }
+
+                if (!weaponStats.TryGetValue(weaponKey, out var progress))
+                {
+                    progress = new WeaponStatProgress
                     {
                         SteamId = steamId,
-                        WeaponName = group.Key,
-                        Kills = group.Sum(entry => entry.Stat.Kills),
-                        Headshots = group.Sum(entry => entry.Stat.Headshots)
-                    },
-                    StringComparer.OrdinalIgnoreCase);
+                        WeaponName = weaponKey
+                    };
+                    weaponStats[weaponKey] = progress;
+                }
+
+                progress.Kills += storedStat.Kills;
+                progress.Headshots += storedStat.Headshots;
+            }
+
+            _weaponStatsBySteamId[steamId] = weaponStats;
         }
 
         if (!_missionStatesBySteamId.ContainsKey(steamId))
         {
-            _missionStatesBySteamId[steamId] = _repository.GetMissionStates(steamId)
-                .Where(state => !string.IsNullOrWhiteSpace(state.MissionKey) && !string.IsNullOrWhiteSpace(state.PeriodKey))
-                .GroupBy(state => BuildMissionLookupKey(state.MissionKey, state.PeriodKey), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group
-                        .OrderByDescending(state => state.CompletedUtc ?? DateTimeOffset.MinValue)
-                        .ThenByDescending(state => state.Progress)
-                        .First(),
-                    StringComparer.OrdinalIgnoreCase);
+            var missionStates = new Dictionary<string, PlayerMissionState>(StringComparer.OrdinalIgnoreCase);
+            foreach (var storedState in _repository.GetMissionStates(steamId))
+            {
+                if (string.IsNullOrWhiteSpace(storedState.MissionKey) || string.IsNullOrWhiteSpace(storedState.PeriodKey))
+                {
+                    continue;
+                }
+
+                var missionKey = BuildMissionLookupKey(storedState.MissionKey, storedState.PeriodKey);
+                if (!missionStates.TryGetValue(missionKey, out var currentBest) || IsBetterMissionState(storedState, currentBest))
+                {
+                    missionStates[missionKey] = storedState;
+                }
+            }
+
+            _missionStatesBySteamId[steamId] = missionStates;
         }
 
         if (!_achievementKeysBySteamId.ContainsKey(steamId))
@@ -691,6 +703,23 @@ public sealed partial class XPXLevelsPlugin
     private static string BuildMissionLookupKey(string missionKey, string periodKey)
     {
         return missionKey + "::" + periodKey;
+    }
+
+    private static bool IsBetterMissionState(PlayerMissionState candidate, PlayerMissionState current)
+    {
+        var candidateCompleted = candidate.CompletedUtc ?? DateTimeOffset.MinValue;
+        var currentCompleted = current.CompletedUtc ?? DateTimeOffset.MinValue;
+        if (candidateCompleted != currentCompleted)
+        {
+            return candidateCompleted > currentCompleted;
+        }
+
+        if (candidate.Progress != current.Progress)
+        {
+            return candidate.Progress > current.Progress;
+        }
+
+        return false;
     }
 
     private static string GetMissionPeriodKey(string scope)
