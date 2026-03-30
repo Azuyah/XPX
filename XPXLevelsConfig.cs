@@ -29,6 +29,7 @@ public sealed class XPXLevelsConfig : BasePluginConfig
     [JsonPropertyName("MvpCredits")] public int MvpCredits { get; set; } = 2;
     [JsonPropertyName("FirstBloodCredits")] public int FirstBloodCredits { get; set; } = 1;
     [JsonPropertyName("ClutchCredits")] public int ClutchCredits { get; set; } = 4;
+    [JsonPropertyName("ChickenKillXp")] public int ChickenKillXp { get; set; } = 1;
     [JsonPropertyName("BotXpMultiplier")] public double BotXpMultiplier { get; set; } = 0.30d;
     [JsonPropertyName("ShowKillXpMessages")] public bool ShowKillXpMessages { get; set; } = true;
     [JsonPropertyName("CurrencyName")] public string CurrencyName { get; set; } = "Credits";

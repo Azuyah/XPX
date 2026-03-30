@@ -22,6 +22,13 @@ namespace XPXLevels;
 [MinimumApiVersion(80)]
 public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevelsConfig>
 {
+    private enum ForcedLoadoutType
+    {
+        Rifle,
+        Pistol,
+        Knife
+    }
+
     private const int DefaultBotCount = 10;
     private const float TransientPanelDurationSeconds = 6.0f;
     private const int TransitionSnapshotLifetimeMinutes = 10;
@@ -76,6 +83,8 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     private readonly Dictionary<ulong, TransitionSnapshotEntry> _transitionSnapshotBySteamId = new();
 
     private XPXLevelsRepository? _repository;
+    private bool _forcedLoadoutModeEnabled;
+    private ForcedLoadoutType _forcedLoadout = ForcedLoadoutType.Rifle;
     private MapVoteSession? _activeMapVote;
     private GameTimer? _activeMapVoteTimer;
     private GameTimer? _activeMapVoteReminderTimer;
@@ -83,7 +92,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     private string? _transitionSnapshotPath;
 
     public override string ModuleName => "XPX Levels";
-    public override string ModuleVersion => "1.4.0-dev";
+    public override string ModuleVersion => "1.4.0";
     public override string ModuleAuthor => "OpenAI";
     public override string ModuleDescription => "Levels, XP rewards, RTV, and admin tools for XPX CS2.";
 
@@ -113,6 +122,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         config.MvpCredits = Math.Max(0, config.MvpCredits);
         config.FirstBloodCredits = Math.Max(0, config.FirstBloodCredits);
         config.ClutchCredits = Math.Max(0, config.ClutchCredits);
+        config.ChickenKillXp = Math.Max(0, config.ChickenKillXp);
         config.BotXpMultiplier = Math.Clamp(config.BotXpMultiplier, 0d, 1d);
         config.GambleWinChancePercent = Math.Clamp(config.GambleWinChancePercent, 1, 99);
         config.GambleMinXp = Math.Max(1, config.GambleMinXp);
@@ -304,6 +314,12 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
         var killer = attacker!;
         var deadPlayer = victim!;
+        if (IsChickenTarget(deadPlayer))
+        {
+            AdjustXp(killer, Config.ChickenKillXp, "killing a chicken", true);
+            return HookResult.Continue;
+        }
+
         if (!CanAwardKillXp(killer, deadPlayer))
         {
             return HookResult.Continue;
@@ -656,6 +672,26 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         AddBots(caller?.PlayerName ?? "Console", desiredBots, command, caller);
     }
 
+    [ConsoleCommand("css_forceloadout", "Force a global rifle, pistol, or knife loadout for all players")]
+    [RequiresPermissions(PermissionMap)]
+    [CommandHelper(minArgs: 1, usage: "[rifle|pistol|knife|off]", whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    public void OnForceLoadoutCommand(CCSPlayerController? caller, CommandInfo command)
+    {
+        if (!TryParseForcedLoadout(command.GetArg(1), out var loadout, out var disable))
+        {
+            Reply(command, "{Red}Unknown loadout. Use {White}rifle{Red}, {White}pistol{Red}, {White}knife{Red}, or {White}off");
+            return;
+        }
+
+        if (disable)
+        {
+            DisableForcedLoadoutMode(caller?.PlayerName ?? "Console", command, caller);
+            return;
+        }
+
+        EnableForcedLoadoutMode(loadout, caller?.PlayerName ?? "Console", command, caller);
+    }
+
     [ConsoleCommand("css_forcevote", "Start a map vote immediately")]
     [RequiresPermissions(PermissionVote)]
     [CommandHelper(whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
@@ -679,6 +715,16 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         ResetTransientUiState();
         ResetFeatureRoundState();
         ScheduleOnlinePlayerSyncs();
+        if (_forcedLoadoutModeEnabled)
+        {
+            AddTimer(1.0f, () =>
+            {
+                ApplyDeathmatchModeCommands();
+                ApplyForcedLoadoutServerRules();
+                ReapplyForcedLoadoutToAlivePlayers();
+            }, TimerFlags.STOP_ON_MAPCHANGE);
+        }
+
         AddTimer(90.0f, ClearTransitionSnapshot, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
@@ -968,6 +1014,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             menu.AddMenuOption("Restart current map", (admin, _) => RestartCurrentMap(admin.PlayerName));
             menu.AddMenuOption("Change game mode", (admin, _) => OpenGameModeMenu(admin));
             menu.AddMenuOption("Special rounds", (admin, _) => OpenSpecialRoundsMenu(admin));
+            menu.AddMenuOption($"Weapon loadout ({GetForcedLoadoutStatusLabel()})", (admin, _) => OpenForcedLoadoutMenu(admin));
         }
 
         if (HasPermission(player, PermissionKick))
@@ -1072,6 +1119,20 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             {
                 ApplyGameMode(selectedMode, player.PlayerName);
             });
+        }
+
+        OpenXPXMenu(player, menu);
+    }
+
+    private void OpenForcedLoadoutMenu(CCSPlayerController player)
+    {
+        var menu = CreateMenu("Weapon Loadout");
+        menu.AddMenuOption("Rifles for all players", (admin, _) => EnableForcedLoadoutMode(ForcedLoadoutType.Rifle, admin.PlayerName, actor: admin));
+        menu.AddMenuOption("Pistols for all players", (admin, _) => EnableForcedLoadoutMode(ForcedLoadoutType.Pistol, admin.PlayerName, actor: admin));
+        menu.AddMenuOption("Knives for all players", (admin, _) => EnableForcedLoadoutMode(ForcedLoadoutType.Knife, admin.PlayerName, actor: admin));
+        if (_forcedLoadoutModeEnabled)
+        {
+            menu.AddMenuOption("Disable forced loadout", (admin, _) => DisableForcedLoadoutMode(admin.PlayerName, actor: admin));
         }
 
         OpenXPXMenu(player, menu);
@@ -1446,10 +1507,78 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void ApplyGameMode(GameModeOption mode, string actorName)
     {
+        _forcedLoadoutModeEnabled = false;
         SaveAllPlayerProgress();
-        Broadcast("{Gold}" + actorName + "{Default} switched the server to {White}" + mode.Label + "{Default}.");
+        var nextMap = ResolvePreferredModeMap(mode);
+        Broadcast("{Gold}" + actorName + "{Default} switched the server to {White}" + mode.Label + "{Default}. Loading {White}" + nextMap + "{Default}.");
         Server.ExecuteCommand($"game_alias {mode.Alias}");
-        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"changelevel \"{Server.MapName}\""), TimerFlags.STOP_ON_MAPCHANGE);
+
+        var (gameType, gameMode, mapGroup) = ResolveModeConVars(mode.Alias);
+        if (gameType is not null)
+        {
+            Server.ExecuteCommand($"game_type {gameType.Value}");
+        }
+
+        if (gameMode is not null)
+        {
+            Server.ExecuteCommand($"game_mode {gameMode.Value}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(mapGroup))
+        {
+            Server.ExecuteCommand($"mapgroup {mapGroup}");
+        }
+
+        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{nextMap}\""), TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void EnableForcedLoadoutMode(ForcedLoadoutType loadout, string actorName, CommandInfo? command = null, CCSPlayerController? actor = null)
+    {
+        _forcedLoadoutModeEnabled = true;
+        _forcedLoadout = loadout;
+        SaveAllPlayerProgress();
+
+        var nextMap = ResolvePreferredModeMap(new GameModeOption
+        {
+            Label = "Deathmatch",
+            Alias = "deathmatch"
+        });
+
+        Broadcast("{Gold}" + actorName + "{Default} enabled {White}" + GetForcedLoadoutLabel(loadout) + "{Default} loadout mode for all players.");
+        ApplyDeathmatchModeCommands();
+        ApplyForcedLoadoutServerRules();
+        ReapplyForcedLoadoutToAlivePlayers();
+
+        ReplyLoadoutCommandResult(command, actor, "{Green}Forced loadout is now {White}" + GetForcedLoadoutLabel(loadout) + "{Green} for all players.");
+        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{nextMap}\""), TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void DisableForcedLoadoutMode(string actorName, CommandInfo? command = null, CCSPlayerController? actor = null)
+    {
+        if (!_forcedLoadoutModeEnabled)
+        {
+            ReplyLoadoutCommandResult(command, actor, "{Yellow}Forced loadout mode is already disabled.");
+            return;
+        }
+
+        _forcedLoadoutModeEnabled = false;
+        ReplyLoadoutCommandResult(command, actor, "{Green}Forced loadout mode is disabled. Returning to standard Deathmatch.");
+
+        var deathmatchMode = Config.GameModes.FirstOrDefault(mode =>
+            mode.Alias.Contains("deathmatch", StringComparison.OrdinalIgnoreCase) ||
+            mode.Alias.Equals("dm", StringComparison.OrdinalIgnoreCase) ||
+            mode.Label.Contains("deathmatch", StringComparison.OrdinalIgnoreCase));
+
+        if (deathmatchMode is not null)
+        {
+            ApplyGameMode(deathmatchMode, actorName);
+            return;
+        }
+
+        SaveAllPlayerProgress();
+        Broadcast("{Gold}" + actorName + "{Default} disabled forced loadout mode and restored standard Deathmatch.");
+        ApplyDeathmatchModeCommands();
+        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{ResolvePreferredModeMap(new GameModeOption { Label = "Deathmatch", Alias = "deathmatch" })}\""), TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private bool TryGetGameMode(string value, out GameModeOption gameMode)
@@ -1552,6 +1681,103 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         }
 
         return killer.Team != victim.Team;
+    }
+
+    private bool IsChickenTarget(CCSPlayerController player)
+    {
+        return player is { IsValid: true } &&
+               player.IsBot &&
+               player.Team is not CsTeam.Terrorist and not CsTeam.CounterTerrorist &&
+               player.PlayerName.Contains("chicken", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryParseForcedLoadout(string value, out ForcedLoadoutType loadout, out bool disable)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        disable = normalized is "off" or "disable" or "disabled" or "normal";
+        loadout = normalized switch
+        {
+            "rifle" or "rifles" => ForcedLoadoutType.Rifle,
+            "pistol" or "pistols" => ForcedLoadoutType.Pistol,
+            "knife" or "knives" => ForcedLoadoutType.Knife,
+            _ => ForcedLoadoutType.Rifle
+        };
+
+        return disable || normalized is "rifle" or "rifles" or "pistol" or "pistols" or "knife" or "knives";
+    }
+
+    private string ResolvePreferredModeMap(GameModeOption mode)
+    {
+        var alias = mode.Alias.Trim().ToLowerInvariant();
+        var currentMap = Server.MapName;
+        if (IsMapCompatibleWithMode(currentMap, alias))
+        {
+            return currentMap;
+        }
+
+        if (alias.Contains("armsrace", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("arms race", StringComparison.OrdinalIgnoreCase))
+        {
+            return Config.MapPool.FirstOrDefault(map => map.StartsWith("ar_", StringComparison.OrdinalIgnoreCase) && MapExists(map))
+                   ?? "ar_shoots";
+        }
+
+        return Config.MapPool.FirstOrDefault(map =>
+                   (map.StartsWith("de_", StringComparison.OrdinalIgnoreCase) || map.StartsWith("cs_", StringComparison.OrdinalIgnoreCase)) &&
+                   MapExists(map))
+               ?? "de_dust2";
+    }
+
+    private bool IsMapCompatibleWithMode(string mapName, string alias)
+    {
+        if (string.IsNullOrWhiteSpace(mapName))
+        {
+            return false;
+        }
+
+        if (alias.Contains("armsrace", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("arms race", StringComparison.OrdinalIgnoreCase))
+        {
+            return mapName.StartsWith("ar_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (alias.Contains("casual", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("competitive", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("deathmatch", StringComparison.OrdinalIgnoreCase) ||
+            alias.Equals("dm", StringComparison.OrdinalIgnoreCase))
+        {
+            return mapName.StartsWith("de_", StringComparison.OrdinalIgnoreCase) ||
+                   mapName.StartsWith("cs_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return true;
+    }
+
+    private (int? GameType, int? GameMode, string? MapGroup) ResolveModeConVars(string alias)
+    {
+        alias = alias.Trim().ToLowerInvariant();
+        if (alias.Contains("armsrace", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("arms race", StringComparison.OrdinalIgnoreCase))
+        {
+            return (1, 0, "mg_armsrace");
+        }
+
+        if (alias.Contains("deathmatch", StringComparison.OrdinalIgnoreCase) || alias == "dm")
+        {
+            return (1, 2, "mg_active");
+        }
+
+        if (alias.Contains("competitive", StringComparison.OrdinalIgnoreCase))
+        {
+            return (0, 1, "mg_active");
+        }
+
+        if (alias.Contains("casual", StringComparison.OrdinalIgnoreCase))
+        {
+            return (0, 0, "mg_active");
+        }
+
+        return (null, null, null);
     }
 
     private void KickPlayer(CCSPlayerController target, string actorName)
@@ -1729,19 +1955,12 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             Utilities.SetStateChanged(player, "CBasePlayerController", "m_iszPlayerName");
         }
 
-        if (!refreshEquipment || !player.PawnIsAlive || string.IsNullOrWhiteSpace(reward?.KnifeItem))
+        if (!refreshEquipment || !player.PawnIsAlive)
         {
             return;
         }
 
-        player.RemoveItemBySlot(gear_slot_t.GEAR_SLOT_KNIFE);
-        AddTimer(0.1f, () =>
-        {
-            if (IsRealPlayer(player) && player.PawnIsAlive)
-            {
-                player.GiveNamedItem(reward.KnifeItem);
-            }
-        }, TimerFlags.STOP_ON_MAPCHANGE);
+        ApplyEquipmentState(player, progress, reward);
     }
 
     private LevelReward? GetCurrentReward(int level)
@@ -2699,6 +2918,149 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     {
         return AdminManager.PlayerHasPermissions(player, PermissionRoot) ||
                AdminManager.PlayerHasPermissions(player, permission);
+    }
+
+    private void ApplyEquipmentState(CCSPlayerController player, PlayerProgress progress, LevelReward? reward)
+    {
+        if (_forcedLoadoutModeEnabled)
+        {
+            EquipPlayerForForcedLoadout(player, progress, reward);
+            return;
+        }
+
+        GiveRewardKnife(player, reward);
+    }
+
+    private void GiveRewardKnife(CCSPlayerController player, LevelReward? reward)
+    {
+        if (!IsRealPlayer(player) || !player.PawnIsAlive || string.IsNullOrWhiteSpace(reward?.KnifeItem))
+        {
+            return;
+        }
+
+        player.RemoveItemBySlot(gear_slot_t.GEAR_SLOT_KNIFE);
+        AddTimer(0.1f, () =>
+        {
+            if (IsRealPlayer(player) && player.PawnIsAlive)
+            {
+                player.GiveNamedItem(reward.KnifeItem);
+            }
+        }, TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void EquipPlayerForForcedLoadout(CCSPlayerController player, PlayerProgress progress, LevelReward? reward = null)
+    {
+        if (!IsRealPlayer(player) || !player.PawnIsAlive)
+        {
+            return;
+        }
+
+        player.RemoveWeapons();
+        AddTimer(0.08f, () =>
+        {
+            if (!IsRealPlayer(player) || !player.PawnIsAlive)
+            {
+                return;
+            }
+
+            switch (_forcedLoadout)
+            {
+                case ForcedLoadoutType.Rifle:
+                    player.GiveNamedItem(player.Team == CsTeam.CounterTerrorist ? "weapon_m4a1_silencer" : "weapon_ak47");
+                    break;
+                case ForcedLoadoutType.Pistol:
+                    player.GiveNamedItem(player.Team == CsTeam.CounterTerrorist ? "weapon_hkp2000" : "weapon_glock");
+                    break;
+                case ForcedLoadoutType.Knife:
+                    player.GiveNamedItem(!string.IsNullOrWhiteSpace(reward?.KnifeItem) ? reward.KnifeItem : "weapon_knife");
+                    break;
+            }
+        }, TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void ReapplyForcedLoadoutToAlivePlayers()
+    {
+        if (!_forcedLoadoutModeEnabled)
+        {
+            return;
+        }
+
+        foreach (var player in GetHumanPlayers().Where(static player => player.PawnIsAlive))
+        {
+            var progress = EnsurePlayerProgress(player);
+            if (progress is null)
+            {
+                continue;
+            }
+
+            var reward = GetCurrentReward(_levelCurve.GetState(progress.TotalXp).Level);
+            EquipPlayerForForcedLoadout(player, progress, reward);
+        }
+    }
+
+    private void ApplyDeathmatchModeCommands()
+    {
+        Server.ExecuteCommand("game_alias deathmatch");
+
+        var (gameType, gameMode, mapGroup) = ResolveModeConVars("deathmatch");
+        if (gameType is not null)
+        {
+            Server.ExecuteCommand($"game_type {gameType.Value}");
+        }
+
+        if (gameMode is not null)
+        {
+            Server.ExecuteCommand($"game_mode {gameMode.Value}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(mapGroup))
+        {
+            Server.ExecuteCommand($"mapgroup {mapGroup}");
+        }
+    }
+
+    private void ApplyForcedLoadoutServerRules()
+    {
+        Server.ExecuteCommand("mp_respawn_on_death_t 1");
+        Server.ExecuteCommand("mp_respawn_on_death_ct 1");
+        Server.ExecuteCommand("mp_teammates_are_enemies 1");
+        Server.ExecuteCommand("mp_dm_teammode 0");
+        Server.ExecuteCommand("mp_buytime 0");
+        Server.ExecuteCommand("mp_buy_anywhere 0");
+        Server.ExecuteCommand("mp_buy_during_immunity 0");
+        Server.ExecuteCommand("mp_dm_bonus_length_min 0");
+        Server.ExecuteCommand("mp_dm_bonus_length_max 0");
+        Server.ExecuteCommand("mp_dm_bonus_percent 0");
+    }
+
+    private string GetForcedLoadoutStatusLabel()
+    {
+        return _forcedLoadoutModeEnabled ? GetForcedLoadoutLabel(_forcedLoadout) : "Off";
+    }
+
+    private static string GetForcedLoadoutLabel(ForcedLoadoutType loadout)
+    {
+        return loadout switch
+        {
+            ForcedLoadoutType.Rifle => "Rifles",
+            ForcedLoadoutType.Pistol => "Pistols",
+            ForcedLoadoutType.Knife => "Knives",
+            _ => "Loadout"
+        };
+    }
+
+    private void ReplyLoadoutCommandResult(CommandInfo? command, CCSPlayerController? actor, string message)
+    {
+        if (IsRealPlayer(actor))
+        {
+            Reply(actor!, message);
+            return;
+        }
+
+        if (command is not null)
+        {
+            Reply(command, message);
+        }
     }
 
     private void Reply(CCSPlayerController player, string message)
