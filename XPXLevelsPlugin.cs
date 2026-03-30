@@ -30,6 +30,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     }
 
     private const int DefaultBotCount = 10;
+    private const int ReadOnlyLinesPerPage = 4;
     private const float TransientPanelDurationSeconds = 6.0f;
     private const int TransitionSnapshotLifetimeMinutes = 10;
     private const string PermissionRoot = "@XPX/root";
@@ -1090,7 +1091,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             menu.AddMenuOption("Restart current map", (admin, _) => RestartCurrentMap(admin.PlayerName));
             menu.AddMenuOption("Change game mode", (admin, _) => OpenGameModeMenu(admin));
             menu.AddMenuOption("Special rounds", (admin, _) => OpenSpecialRoundsMenu(admin));
-            menu.AddMenuOption($"Weapon loadout ({GetForcedLoadoutStatusLabel()})", (admin, _) => OpenForcedLoadoutMenu(admin));
+            menu.AddMenuOption($"XPX loadout mode ({GetForcedLoadoutStatusLabel()})", (admin, _) => OpenForcedLoadoutMenu(admin));
         }
 
         if (HasPermission(player, PermissionKick))
@@ -1192,6 +1193,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     private void OpenGameModeMenu(CCSPlayerController player)
     {
         var menu = CreateMenu("Change Game Mode");
+        menu.AddMenuOption($"XPX loadout mode ({GetForcedLoadoutStatusLabel()})", (admin, _) => OpenForcedLoadoutMenu(admin));
         foreach (var mode in Config.GameModes)
         {
             var selectedMode = mode;
@@ -2498,12 +2500,10 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void OpenHelpMenu(CCSPlayerController player, bool autoOpened = false)
     {
-        var progress = EnsurePlayerProgress(player);
-        var state = progress is null ? _levelCurve.GetState(0) : _levelCurve.GetState(progress.TotalXp);
         var mode = GetCurrentXpModeLabel();
         var menu = CreateMenu(autoOpened
-            ? $"Welcome | {RenderShortLevelLabel(state.Level)} | {mode}"
-            : $"XPX Help | {RenderShortLevelLabel(state.Level)} | {mode}");
+            ? $"Welcome to XPX | {mode}"
+            : $"XPX Help | {mode}");
 
         menu.AddMenuOption("Getting started", (_, _) => OpenHelpGettingStartedMenu(player));
         menu.AddMenuOption("Commands", (_, _) => OpenCommandsMenu(player));
@@ -2520,16 +2520,12 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void OpenHelpGettingStartedMenu(CCSPlayerController player)
     {
-        var progress = EnsurePlayerProgress(player);
-        var state = progress is null ? _levelCurve.GetState(0) : _levelCurve.GetState(progress.TotalXp);
         var lines = new[]
         {
             $"Current mode: {GetCurrentXpModeLabel()}",
-            $"Current level: {state.Level}/{Config.MaxLevel}",
-            $"Current tag: {GetCurrentVisibleTag(progress)}",
-            "Earn XP by kills, wins, and objectives.",
-            "Earn Credits from bonuses, missions, and achievements.",
-            "Warmup gives no XP, so progression starts after warmup."
+            "Use !me for your player hub and !rank for your level, tag, and next reward.",
+            "Earn XP from kills, wins, objectives, streaks, missions, and achievements.",
+            $"Warmup gives no XP, so progression starts after warmup."
         };
 
         OpenReadOnlyMenu(player, "Help | Getting Started", lines, "Back to help", target => OpenHelpMenu(target));
@@ -2539,11 +2535,11 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     {
         var lines = new[]
         {
-            "Core: !me !help !commands",
-            "Progress: !level !rank !top !stats",
-            "Goals: !missions !achievements",
-            "Economy: !shop !wallet !gamble <xp>",
-            "Maps: !rtv !vote",
+            "Core: !me | !help | !commands",
+            "Progress: !level | !rank | !top | !stats",
+            "Goals: !missions | !achievements",
+            $"Economy: !shop | !wallet | !gamble <xp>",
+            "Maps: !rtv | !vote",
             "Menus: !bindmenu or !1-!9 while a menu is open"
         };
 
@@ -2552,17 +2548,13 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void OpenHelpProgressionMenu(CCSPlayerController player)
     {
-        var progress = EnsurePlayerProgress(player);
-        var state = progress is null ? _levelCurve.GetState(0) : _levelCurve.GetState(progress.TotalXp);
-        var nextReward = progress is null ? null : GetNextReward(state.Level);
         var lines = new[]
         {
             $"Level cap: {Config.MaxLevel}",
-            $"You are {RenderShortLevelLabel(state.Level)} with tag {GetCurrentVisibleTag(progress)}",
+            "Use !rank, !level, and !top to track your current progress.",
             "Daily and weekly missions grant XP and Credits.",
             "Achievements unlock permanent badges and Credits.",
-            "Tags and knives unlock at milestone levels.",
-            "Next reward: " + (nextReward is null ? "All rewards unlocked" : DescribeReward(nextReward))
+            "Tags and knife rewards unlock at milestone levels."
         };
 
         OpenReadOnlyMenu(player, "Help | Progression", lines, "Back to help", target => OpenHelpMenu(target));
@@ -2577,7 +2569,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         {
             $"Current {Config.CurrencyName}: {credits}",
             $"Crate tokens: {tokens}",
-            "Use !shop to buy XP, credits, and crate tokens.",
+            "Use !shop to buy XPX rewards and crate tokens.",
             "Open crates from inside the shop flow.",
             "Bonuses, missions, and achievements feed your economy.",
             "Use !wallet to see your balance and totals."
@@ -2715,12 +2707,34 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void OpenReadOnlyMenu(CCSPlayerController player, string title, IEnumerable<string> lines, string backLabel, Action<CCSPlayerController> backAction)
     {
-        var menu = CreateMenu(title);
-        menu.PostSelectAction = PostSelectAction.Close;
-
-        foreach (var line in lines)
+        var lineList = lines
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+        if (lineList.Count == 0)
         {
-            menu.AddMenuOption(line, static (_, _) => { }, disabled: true);
+            lineList.Add("Nothing to show yet.");
+        }
+
+        OpenReadOnlyMenuPage(player, title, lineList, backLabel, backAction, 0);
+    }
+
+    private void OpenReadOnlyMenuPage(CCSPlayerController player, string title, IReadOnlyList<string> lines, string backLabel, Action<CCSPlayerController> backAction, int page)
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(lines.Count / (double)ReadOnlyLinesPerPage));
+        var currentPage = Math.Clamp(page, 0, totalPages - 1);
+        var pageLines = lines.Skip(currentPage * ReadOnlyLinesPerPage).Take(ReadOnlyLinesPerPage).ToList();
+
+        var menu = CreateMenu(totalPages > 1 ? $"{title} ({currentPage + 1}/{totalPages})" : title);
+        menu.BodyLines.AddRange(pageLines);
+
+        if (currentPage > 0)
+        {
+            menu.AddMenuOption("Previous page", (target, _) => OpenReadOnlyMenuPage(target, title, lines, backLabel, backAction, currentPage - 1));
+        }
+
+        if (currentPage + 1 < totalPages)
+        {
+            menu.AddMenuOption("Next page", (target, _) => OpenReadOnlyMenuPage(target, title, lines, backLabel, backAction, currentPage + 1));
         }
 
         menu.AddMenuOption(backLabel, (target, _) => backAction(target));
@@ -3129,8 +3143,9 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         return new XPXNumberMenu(title, this)
         {
             ExitButton = true,
-            ItemsPerPage = 6,
+            ItemsPerPage = 5,
             TitleColor = "gold",
+            BodyColor = "silver",
             EnabledColor = "white",
             DisabledColor = "gray",
             PrevPageColor = "deepskyblue",

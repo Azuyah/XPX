@@ -10,7 +10,9 @@ public sealed class XPXNumberMenu : BaseMenu
     private readonly BasePlugin _plugin;
 
     public int ItemsPerPage { get; set; } = 6;
+    public List<string> BodyLines { get; } = [];
     public string TitleColor { get; set; } = "gold";
+    public string BodyColor { get; set; } = "silver";
     public string EnabledColor { get; set; } = "white";
     public string DisabledColor { get; set; } = "gray";
     public string PrevPageColor { get; set; } = "deepskyblue";
@@ -66,6 +68,20 @@ public sealed class XPXNumberMenuInstance : BaseMenuInstance
             var builder = new StringBuilder();
             builder.Append($"<b><font color='{menu.TitleColor}'>{menu.Title}</font></b>");
             builder.AppendLine("<br>");
+
+            if (menu.BodyLines.Count > 0)
+            {
+                foreach (var bodyLine in menu.BodyLines)
+                {
+                    builder.Append($"<font color='{menu.BodyColor}'>{bodyLine}</font>");
+                    builder.AppendLine("<br>");
+                }
+
+                if (menu.MenuOptions.Count > 0)
+                {
+                    builder.AppendLine("<br>");
+                }
+            }
 
             var keyOffset = 1;
             for (var index = CurrentOffset; index < Math.Min(CurrentOffset + MenuItemsPerPage, menu.MenuOptions.Count); index++)
