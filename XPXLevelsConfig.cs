@@ -18,6 +18,7 @@ public sealed class XPXLevelsConfig : BasePluginConfig
     [JsonPropertyName("RoundWinXp")] public int RoundWinXp { get; set; } = 30;
     [JsonPropertyName("BombPlantXp")] public int BombPlantXp { get; set; } = 20;
     [JsonPropertyName("BombDefuseXp")] public int BombDefuseXp { get; set; } = 25;
+    [JsonPropertyName("ChickenKillXp")] public int ChickenKillXp { get; set; } = 1;
     [JsonPropertyName("BotXpMultiplier")] public double BotXpMultiplier { get; set; } = 0.30d;
     [JsonPropertyName("ShowKillXpMessages")] public bool ShowKillXpMessages { get; set; } = true;
     [JsonPropertyName("GambleWinChancePercent")] public int GambleWinChancePercent { get; set; } = 50;

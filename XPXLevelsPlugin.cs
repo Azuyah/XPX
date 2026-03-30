@@ -102,6 +102,7 @@ public sealed class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevelsConfig>
         config.RoundWinXp = Math.Max(0, config.RoundWinXp);
         config.BombPlantXp = Math.Max(0, config.BombPlantXp);
         config.BombDefuseXp = Math.Max(0, config.BombDefuseXp);
+        config.ChickenKillXp = Math.Max(0, config.ChickenKillXp);
         config.BotXpMultiplier = Math.Clamp(config.BotXpMultiplier, 0d, 1d);
         config.GambleWinChancePercent = Math.Clamp(config.GambleWinChancePercent, 1, 99);
         config.GambleMinXp = Math.Max(1, config.GambleMinXp);
@@ -268,6 +269,12 @@ public sealed class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevelsConfig>
 
         var killer = attacker!;
         var deadPlayer = victim!;
+        if (IsChickenTarget(deadPlayer))
+        {
+            AdjustXp(killer, Config.ChickenKillXp, "killing a chicken", true);
+            return HookResult.Continue;
+        }
+
         if (!CanAwardKillXp(killer, deadPlayer))
         {
             return HookResult.Continue;
@@ -1385,9 +1392,27 @@ public sealed class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevelsConfig>
     private void ApplyGameMode(GameModeOption mode, string actorName)
     {
         SaveAllPlayerProgress();
-        Broadcast("{Gold}" + actorName + "{Default} switched the server to {White}" + mode.Label + "{Default}.");
+        var nextMap = ResolvePreferredModeMap(mode);
+        Broadcast("{Gold}" + actorName + "{Default} switched the server to {White}" + mode.Label + "{Default}. Loading {White}" + nextMap + "{Default}.");
         Server.ExecuteCommand($"game_alias {mode.Alias}");
-        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"changelevel \"{Server.MapName}\""), TimerFlags.STOP_ON_MAPCHANGE);
+
+        var (gameType, gameMode, mapGroup) = ResolveModeConVars(mode.Alias);
+        if (gameType is not null)
+        {
+            Server.ExecuteCommand($"game_type {gameType.Value}");
+        }
+
+        if (gameMode is not null)
+        {
+            Server.ExecuteCommand($"game_mode {gameMode.Value}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(mapGroup))
+        {
+            Server.ExecuteCommand($"mapgroup {mapGroup}");
+        }
+
+        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{nextMap}\""), TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private bool TryGetGameMode(string value, out GameModeOption gameMode)
@@ -1490,6 +1515,88 @@ public sealed class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevelsConfig>
         }
 
         return killer.Team != victim.Team;
+    }
+
+    private bool IsChickenTarget(CCSPlayerController player)
+    {
+        return player is { IsValid: true } &&
+               player.IsBot &&
+               player.Team is not CsTeam.Terrorist and not CsTeam.CounterTerrorist &&
+               player.PlayerName.Contains("chicken", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string ResolvePreferredModeMap(GameModeOption mode)
+    {
+        var alias = mode.Alias.Trim().ToLowerInvariant();
+        var currentMap = Server.MapName;
+        if (IsMapCompatibleWithMode(currentMap, alias))
+        {
+            return currentMap;
+        }
+
+        if (alias.Contains("armsrace", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("arms race", StringComparison.OrdinalIgnoreCase))
+        {
+            return Config.MapPool.FirstOrDefault(map => map.StartsWith("ar_", StringComparison.OrdinalIgnoreCase) && MapExists(map))
+                   ?? "ar_shoots";
+        }
+
+        return Config.MapPool.FirstOrDefault(map =>
+                   (map.StartsWith("de_", StringComparison.OrdinalIgnoreCase) || map.StartsWith("cs_", StringComparison.OrdinalIgnoreCase)) &&
+                   MapExists(map))
+               ?? "de_dust2";
+    }
+
+    private bool IsMapCompatibleWithMode(string mapName, string alias)
+    {
+        if (string.IsNullOrWhiteSpace(mapName))
+        {
+            return false;
+        }
+
+        if (alias.Contains("armsrace", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("arms race", StringComparison.OrdinalIgnoreCase))
+        {
+            return mapName.StartsWith("ar_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (alias.Contains("casual", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("competitive", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("deathmatch", StringComparison.OrdinalIgnoreCase) ||
+            alias.Equals("dm", StringComparison.OrdinalIgnoreCase))
+        {
+            return mapName.StartsWith("de_", StringComparison.OrdinalIgnoreCase) ||
+                   mapName.StartsWith("cs_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return true;
+    }
+
+    private (int? GameType, int? GameMode, string? MapGroup) ResolveModeConVars(string alias)
+    {
+        alias = alias.Trim().ToLowerInvariant();
+        if (alias.Contains("armsrace", StringComparison.OrdinalIgnoreCase) ||
+            alias.Contains("arms race", StringComparison.OrdinalIgnoreCase))
+        {
+            return (1, 0, "mg_armsrace");
+        }
+
+        if (alias.Contains("deathmatch", StringComparison.OrdinalIgnoreCase) || alias == "dm")
+        {
+            return (1, 2, "mg_active");
+        }
+
+        if (alias.Contains("competitive", StringComparison.OrdinalIgnoreCase))
+        {
+            return (0, 1, "mg_active");
+        }
+
+        if (alias.Contains("casual", StringComparison.OrdinalIgnoreCase))
+        {
+            return (0, 0, "mg_active");
+        }
+
+        return (null, null, null);
     }
 
     private void KickPlayer(CCSPlayerController target, string actorName)
