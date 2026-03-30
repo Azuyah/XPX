@@ -92,7 +92,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     private string? _transitionSnapshotPath;
 
     public override string ModuleName => "XPX Levels";
-    public override string ModuleVersion => "1.4.0";
+    public override string ModuleVersion => "1.4.1";
     public override string ModuleAuthor => "OpenAI";
     public override string ModuleDescription => "Levels, XP rewards, RTV, and admin tools for XPX CS2.";
 
@@ -760,6 +760,19 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             foreach (var message in Config.WelcomeMessages)
             {
                 Reply(joinedPlayer, ExpandTokens(joinedPlayer, progress, message));
+            }
+
+            if (TryGetSteamId(joinedPlayer, out var steamId))
+            {
+                AddTimer(1.2f, () =>
+                {
+                    if (!IsRealPlayer(joinedPlayer) || _openHelpPanels.Contains(steamId) || MenuManager.GetActiveMenu(joinedPlayer) is not null)
+                    {
+                        return;
+                    }
+
+                    ShowHelpPanel(joinedPlayer, steamId, closeActiveMenu: false);
+                }, TimerFlags.STOP_ON_MAPCHANGE);
             }
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
@@ -2389,9 +2402,13 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         ShowHelpPanel(player, steamId);
     }
 
-    private void ShowHelpPanel(CCSPlayerController player, ulong steamId)
+    private void ShowHelpPanel(CCSPlayerController player, ulong steamId, bool closeActiveMenu = true)
     {
-        CloseActiveXPXMenu(player);
+        if (closeActiveMenu)
+        {
+            CloseActiveXPXMenu(player);
+        }
+
         StopHelpPanel(steamId);
         _openHelpPanels.Add(steamId);
         var panelPlayer = player;
@@ -2463,14 +2480,16 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         var lines = new List<string>
         {
             "<b><font color='gold'>XPX Help</font></b>",
-            $"<font color='white'>Max level:</font> <font color='gold'>{Config.MaxLevel}</font>",
-            $"<font color='white'>Your tag:</font> <font color='gold'>{tag}</font>",
             $"<font color='white'>Current mode:</font> <font color='gold'>{currentMode}</font>",
-            "<font color='white'>How it works:</font> <font color='gold'>Play, earn XP and credits, finish missions, unlock badges, and climb to level 500.</font>",
+            $"<font color='white'>Level cap:</font> <font color='gold'>{Config.MaxLevel}</font>",
+            $"<font color='white'>Your tag:</font> <font color='gold'>{tag}</font>",
+            "<font color='white'>How to play:</font> <font color='gold'>Get kills, win rounds, do objectives, and finish missions to earn XP and credits.</font>",
             "<font color='white'>Warmup:</font> <font color='gold'>No XP is awarded during warmup.</font>",
-            "<font color='white'>Player commands:</font> <font color='gold'>!me !level !rank !top !stats !missions !achievements !shop !crate !wallet !rtv !vote !help !gamble &lt;xp&gt;</font>",
-            "<font color='white'>Progression:</font> <font color='gold'>Daily and weekly missions reward XP and credits. Achievements unlock permanent badges.</font>",
-            $"<font color='white'>Economy:</font> <font color='gold'>Spend {Config.CurrencyName} in !shop or on crate tokens in !crate.</font>",
+            "<font color='white'>Start here:</font> <font color='gold'>!me !help !level !rank !top !stats</font>",
+            "<font color='white'>Goals:</font> <font color='gold'>!missions !achievements</font>",
+            $"<font color='white'>Economy:</font> <font color='gold'>Earn {Config.CurrencyName} from missions, achievements, streaks, and bonuses, then spend them in !shop or !crate.</font>",
+            "<font color='white'>Other commands:</font> <font color='gold'>!wallet !rtv !vote !gamble &lt;xp&gt;</font>",
+            "<font color='white'>Progression:</font> <font color='gold'>Level to 500 and unlock permanent tags plus knife rewards.</font>",
             $"<font color='white'>Next reward:</font> <font color='gold'>{nextRewardText}</font>",
             "<font color='white'>Menu input:</font> <font color='gold'>Use !bindmenu for 1-9 keys, or type !1-!9 in chat while a menu is open</font>",
             "<font color='deepskyblue'>Type !help again to close, or wait a few seconds.</font>"
