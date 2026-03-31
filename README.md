@@ -46,9 +46,9 @@ See [LICENSE.md](LICENSE.md) for the full notice.
 | --- | --- | --- |
 | ![Help](docs/screenshots/help.png) | ![Missions](docs/screenshots/missions.png) | ![Crate Reward](docs/screenshots/crate-reward.png) |
 
-| Level Up | Admin Page 2 | Chat Styling |
+| Level Up | Admin Page 2 | Chat Progression |
 | --- | --- | --- |
-| ![Level Up](docs/screenshots/level-up.png) | ![Admin Page 2](docs/screenshots/admin-page-3.png) | ![Chat Text](docs/screenshots/chat-text.png) |
+| ![Level Up](docs/screenshots/level-up.png) | ![Admin Page 2](docs/screenshots/admin-page-3.png) | ![Chat Progression](docs/screenshots/chat-text.png) |
 
 ## What XPX Includes
 
