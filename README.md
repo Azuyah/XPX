@@ -7,6 +7,7 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
 ![SQLite](https://img.shields.io/badge/Storage-SQLite-003B57?logo=sqlite)
+![License](https://img.shields.io/badge/License-Proprietary-red)
 ![Last Commit](https://img.shields.io/github/last-commit/Azuyah/XPX)
 
 XPX is a CounterStrikeSharp plugin for Counter-Strike 2 that adds a full server-side progression layer:
@@ -20,6 +21,17 @@ XPX is a CounterStrikeSharp plugin for Counter-Strike 2 that adds a full server-
 - forced global loadout modes for rifle, pistol, or knife-only servers
 
 The plugin is designed for self-hosted CS2 community servers and is currently deployed with a local Windows + SteamCMD setup.
+
+## License and Usage
+
+XPX is source-available and proprietary.
+
+- personal or internal server use is allowed
+- redistribution, resale, sublicensing, repackaging, and public reposting are not allowed
+- modified copies must not remove or obscure the original authorship, branding, or attribution
+- derivative versions must not be presented as an unrelated original work
+
+See [LICENSE.md](LICENSE.md) for the full notice.
 
 ## Preview
 
@@ -236,6 +248,8 @@ More detail lives in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 - [docs/COMMANDS.md](docs/COMMANDS.md)
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- [docs/releases/v1.0.2.md](docs/releases/v1.0.2.md)
+- [docs/releases/v1.0-xponly.md](docs/releases/v1.0-xponly.md)
 
 ## Notes
 
