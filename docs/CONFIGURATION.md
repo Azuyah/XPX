@@ -14,7 +14,7 @@ game\csgo\addons\counterstrikesharp\configs\plugins\XPXLevels\XPXLevels.json
 
 If you only want the common edits, start here:
 
-- `Rewards` to change tags and knife unlocks
+- `Rewards` to change tags and milestone reward entries
 - `BaseXpToLevel`, `XpLinearGrowthPerLevel`, `XpQuadraticGrowthPerLevel` to rebalance progression
 - `CasualCompetitiveKillXp`, `FastModeKillXp`, `KnifeKillBonusXp`, `HeadshotBonusXp` to tune combat XP
 - `WelcomeMessages` to change the join text and onboarding hints

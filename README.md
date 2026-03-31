@@ -162,7 +162,7 @@ game\csgo\addons\counterstrikesharp\configs\plugins\XPXLevels\XPXLevels.json
 
 Most common edits:
 
-- `Rewards`: change tags and knife unlocks
+- `Rewards`: change tags and milestone reward entries
 - `BaseXpToLevel`, `XpLinearGrowthPerLevel`, `XpQuadraticGrowthPerLevel`: tune the XP curve
 - `CasualCompetitiveKillXp`, `FastModeKillXp`, `KnifeKillBonusXp`, `HeadshotBonusXp`: tune combat rewards
 - `WelcomeMessages`: change the join text players see
@@ -294,27 +294,11 @@ deploy-to-r-server.ps1   # local build + deploy + restart helper
 docs/
 ```
 
-## Development
-
-Common local workflow:
-
-```powershell
-dotnet build
-powershell -ExecutionPolicy Bypass -File .\deploy-to-r-server.ps1
-git status
-git add .
-git commit -m "Describe the change"
-git push origin main
-```
-
-More detail lives in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
-
 ## Additional Docs
 
 - [docs/SETUP.md](docs/SETUP.md)
 - [docs/COMMANDS.md](docs/COMMANDS.md)
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 - [docs/releases/v1.0.2.md](docs/releases/v1.0.2.md)
 - [docs/releases/v1.0-xponly.md](docs/releases/v1.0-xponly.md)
 

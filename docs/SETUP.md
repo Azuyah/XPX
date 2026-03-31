@@ -66,7 +66,7 @@ game\csgo\addons\counterstrikesharp\configs\plugins\XPXLevels\XPXLevels.json
 
 The most common tweaks are:
 
-- `Rewards` for tags and knife unlocks
+- `Rewards` for tags and milestone reward entries
 - `BaseXpToLevel`, `XpLinearGrowthPerLevel`, `XpQuadraticGrowthPerLevel` for the level curve
 - kill reward values such as `CasualCompetitiveKillXp`, `FastModeKillXp`, `KnifeKillBonusXp`, and `HeadshotBonusXp`
 - `WelcomeMessages` for the join/onboarding text
