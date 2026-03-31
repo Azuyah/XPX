@@ -1,60 +1,37 @@
 # Setup Guide
 
-This guide explains how to build, install, and run XPX on a CS2 dedicated server.
+This guide explains how to install and run XPX on a CS2 dedicated server.
 
 ## Requirements
 
 - CS2 dedicated server installed with SteamCMD
 - CounterStrikeSharp installed on the server
-- .NET 8 SDK on the development machine
 - access to the server files
 
 ## Install Package
 
-XPX is intended to be installed from a provided plugin ZIP package.
-
-Use either:
-
-- a release ZIP if you have access to the release page
-- or a plugin ZIP shared directly by the maintainer
-
-Recommended package name:
+Download the plugin ZIP package:
 
 ```text
 XPX-v1.0.2-plugin.zip
 ```
 
-## Project Build
-
-From the repo root:
-
-```powershell
-dotnet build
-```
-
-Expected output:
-
-```text
-bin\Debug\net8.0\XPXLevels.dll
-```
-
 ## Manual ZIP Install
 
-If you received a built ZIP package instead of source access:
-
 1. extract the ZIP locally
-2. locate the built plugin output files
-3. copy them into:
+2. copy the extracted plugin files into:
    `game\csgo\addons\counterstrikesharp\plugins\XPXLevels`
-4. start the server once so XPX can generate its config if needed
-5. edit `XPXLevels.json`
-6. restart the server
+3. start the server once so XPX can generate its config if needed
+4. edit `XPXLevels.json`
+5. restart the server
 
 At minimum, the server needs:
 
 - `XPXLevels.dll`
-- dependency DLLs from the build output
-- runtime support files copied with the build output
+- dependency DLLs from the package
+- runtime support files included with the package
+
+If you want to build from source instead, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Customize XPX
 
@@ -105,38 +82,9 @@ host_writeconfig
 
 If they do not bind the keys, the chat fallback `!1` through `!9` still works while an XPX menu is open.
 
-## Deploy Script
-
-The repo includes a Windows deployment helper:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy-to-r-server.ps1
-```
-
-By default the script:
-
-1. builds the plugin
-2. stops the running CS2 server process
-3. preserves the XPX data directory
-4. copies the latest plugin build into the server plugin folder
-5. restores / migrates config and DB files if needed
-6. starts the CS2 server again
-
-The default server root in the script is:
-
-```text
-R:\cs2-ds
-```
-
-If your server lives somewhere else, edit the `ServerRoot` parameter or pass it in directly:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy-to-r-server.ps1 -ServerRoot "D:\my-cs2-server"
-```
-
 ## Plugin Paths
 
-The deploy script expects the following CounterStrikeSharp layout:
+XPX expects the following CounterStrikeSharp layout:
 
 ```text
 game\csgo\addons\counterstrikesharp\plugins\XPXLevels

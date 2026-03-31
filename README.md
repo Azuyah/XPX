@@ -93,14 +93,6 @@ See [LICENSE.md](LICENSE.md) for the full notice.
 
 - Counter-Strike 2 dedicated server
 - CounterStrikeSharp
-- .NET 8 SDK for local builds
-- Windows PowerShell if you want to use the included deploy script as-is
-
-NuGet packages used by this project:
-
-- `CounterStrikeSharp.API 1.0.364`
-- `Dapper 2.1.72`
-- `Microsoft.Data.Sqlite 10.0.5`
 
 ## Install Options
 
@@ -108,43 +100,41 @@ NuGet packages used by this project:
 
 ### Manual install from a ZIP
 
-Use one of these:
-
-1. download a provided release ZIP if you have access to the release page
-2. or get a plugin ZIP directly from the maintainer
-3. extract it locally
-4. copy the plugin files into your CS2 CounterStrikeSharp plugin folder
-
-Recommended current package name:
+Download this release package:
 
 ```text
 XPX-v1.0.2-plugin.zip
 ```
 
-See [docs/SETUP.md](docs/SETUP.md) for the manual install path.
+Then:
+
+1. extract it locally
+2. copy the plugin files into your CS2 CounterStrikeSharp plugin folder
+3. restart the server
+
+See [docs/SETUP.md](docs/SETUP.md) for the full install path.
 
 ## Quick Start
 
-### 1. Deploy the plugin files
+### 1. Copy the plugin files
 
-Copy the extracted plugin build into your server's CounterStrikeSharp plugin folder.
+Copy the extracted plugin files into your server's CounterStrikeSharp plugin folder.
 
-### 2. Deploy it
+Typical plugin paths:
 
-If your server layout matches the current local setup, use:
+- plugin path: `game\csgo\addons\counterstrikesharp\plugins\XPXLevels`
+- config path: `game\csgo\addons\counterstrikesharp\configs\plugins\XPXLevels\XPXLevels.json`
+- data path: `game\csgo\addons\counterstrikesharp\data\XPXLevels`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy-to-r-server.ps1
+### 2. Configure XPX
+
+Open and edit:
+
+```text
+game\csgo\addons\counterstrikesharp\configs\plugins\XPXLevels\XPXLevels.json
 ```
 
-By default the deploy script targets:
-
-- server root: `R:\cs2-ds`
-- plugin path: `R:\cs2-ds\game\csgo\addons\counterstrikesharp\plugins\XPXLevels`
-- config path: `R:\cs2-ds\game\csgo\addons\counterstrikesharp\configs\plugins\XPXLevels\XPXLevels.json`
-- data path: `R:\cs2-ds\game\csgo\addons\counterstrikesharp\data\XPXLevels`
-
-### 3. Join the server
+### 3. Restart and join the server
 
 Typical local connect:
 
@@ -312,27 +302,13 @@ XPX stores player progression in SQLite by SteamID. It persists:
 - missions
 - achievements
 
-The live DB path used by the deploy script is:
+The default XPX database path is:
 
 ```text
 game\csgo\addons\counterstrikesharp\data\XPXLevels\xpx-levels.db
 ```
 
 XPX also keeps a short-lived transition snapshot during map changes to protect player XP from map-switch reload edge cases.
-
-## Repository Layout
-
-```text
-XPXLevels.csproj
-XPXLevelsPlugin.cs       # core plugin flow, menus, XP, map vote, admin tools
-XPXLevelsFeatures.cs     # stats, missions, achievements, shop, crates, special rounds
-XPXLevelsConfig.cs       # config schema and default values
-XPXLevelsModels.cs       # shared models and enums
-XPXLevelsRepository.cs   # SQLite persistence layer
-XPXNumberMenu.cs         # custom center-screen numbered menu renderer
-deploy-to-r-server.ps1   # local build + deploy + restart helper
-docs/
-```
 
 ## Additional Docs
 
