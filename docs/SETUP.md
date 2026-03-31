@@ -9,17 +9,9 @@ This guide explains how to build, install, and run XPX on a CS2 dedicated server
 - .NET 8 SDK on the development machine
 - access to the server files
 
-## Access Models
+## Access Model
 
-There are two realistic ways to install XPX:
-
-### 1. Repo access
-
-Use this if you can clone the repository directly.
-
-### 2. Manual ZIP install
-
-Use this if you do not have repository access.
+XPX should be treated as a manual ZIP install unless the maintainer explicitly gives source access.
 
 Important:
 
@@ -64,6 +56,38 @@ At minimum, the server needs:
 - `XPXLevels.dll`
 - dependency DLLs from the build output
 - runtime support files copied with the build output
+
+## Menu Keybinds
+
+After joining the server, players should try:
+
+```text
+!bindmenu
+```
+
+XPX menu controls:
+
+- `1-6` select items
+- `7` is `Back` on page 1 or `Prev` on later pages
+- `8` is `Next`
+- `9` is `Close`
+
+If auto-binding does not stick, players can bind the keys manually in their CS2 console:
+
+```cfg
+bind 1 "slot1;css_1"
+bind 2 "slot2;css_2"
+bind 3 "slot3;css_3"
+bind 4 "slot4;css_4"
+bind 5 "slot5;css_5"
+bind 6 "slot6;css_6"
+bind 7 "slot7;css_7"
+bind 8 "slot8;css_8"
+bind 9 "slot9;css_9"
+host_writeconfig
+```
+
+If they do not bind the keys, the chat fallback `!1` through `!9` still works while an XPX menu is open.
 
 ## Deploy Script
 

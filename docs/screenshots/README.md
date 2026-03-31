@@ -25,6 +25,10 @@ Recommended captures:
 
 Current repo screenshots:
 
+- `banner-preview.png`
+- `banner-includes.png`
+- `banner-install-bind.png`
+- `banner-commands.png`
 - `header-cs2-xpx.png`
 - `me.png`
 - `admin-page-1.png`

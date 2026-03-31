@@ -8,7 +8,6 @@
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
 ![SQLite](https://img.shields.io/badge/Storage-SQLite-003B57?logo=sqlite)
 ![License](https://img.shields.io/badge/License-Proprietary-red)
-![Last Commit](https://img.shields.io/github/last-commit/Azuyah/XPX)
 
 ![CS2 XPX Banner](docs/screenshots/header-cs2-xpx.png)
 
@@ -37,6 +36,8 @@ See [LICENSE.md](LICENSE.md) for the full notice.
 
 ## Preview
 
+![Preview Banner](docs/screenshots/banner-preview.png)
+
 | Player Hub | Admin Menu | Shop / Crates |
 | --- | --- | --- |
 | ![Player Hub](docs/screenshots/me.png) | ![Admin Menu](docs/screenshots/admin-page-1.png) | ![Shop](docs/screenshots/shop.png) |
@@ -45,7 +46,13 @@ See [LICENSE.md](LICENSE.md) for the full notice.
 | --- | --- | --- |
 | ![Help](docs/screenshots/help.png) | ![Missions](docs/screenshots/missions.png) | ![Crate Reward](docs/screenshots/crate-reward.png) |
 
+| Level Up | Admin Page 2 | Chat Styling |
+| --- | --- | --- |
+| ![Level Up](docs/screenshots/level-up.png) | ![Admin Page 2](docs/screenshots/admin-page-3.png) | ![Chat Text](docs/screenshots/chat-text.png) |
+
 ## What XPX Includes
+
+![Includes Banner](docs/screenshots/banner-includes.png)
 
 ### Core progression
 
@@ -96,23 +103,16 @@ NuGet packages used by this project:
 
 ## Install Options
 
-### Option A: Clone the repo
+![Install Banner](docs/screenshots/banner-install-bind.png)
 
-If you have repository access, clone it normally:
-
-```powershell
-git clone https://github.com/Azuyah/XPX.git
-cd XPX
-```
-
-### Option B: Manual install from a ZIP
+### Manual install from a ZIP
 
 If you do not have repository access, you cannot clone a private repo directly.
 
 Use one of these instead:
 
-1. download a provided release ZIP
-2. get a plugin ZIP directly from the maintainer
+1. download a provided release ZIP if you have access to the release page
+2. or get a plugin ZIP directly from the maintainer
 3. extract it locally
 4. copy the plugin files into your CS2 CounterStrikeSharp plugin folder
 
@@ -126,11 +126,9 @@ See [docs/SETUP.md](docs/SETUP.md) for the manual install path.
 
 ## Quick Start
 
-### 1. Build the plugin
+### 1. Deploy the plugin files
 
-```powershell
-dotnet build
-```
+Copy the extracted plugin build into your server's CounterStrikeSharp plugin folder.
 
 ### 2. Deploy it
 
@@ -155,7 +153,37 @@ Typical local connect:
 connect 127.0.0.1:27015
 ```
 
+## Menu Keybinds
+
+Use `!bindmenu` in chat first. XPX will try to bind the menu keys locally.
+
+XPX menu controls:
+
+- `1-6` select visible items
+- `7` is `Back` on page 1 or `Prev` on later pages
+- `8` is `Next`
+- `9` is `Close`
+
+If `!bindmenu` does not stick on your client, use these binds manually in the CS2 console:
+
+```cfg
+bind 1 "slot1;css_1"
+bind 2 "slot2;css_2"
+bind 3 "slot3;css_3"
+bind 4 "slot4;css_4"
+bind 5 "slot5;css_5"
+bind 6 "slot6;css_6"
+bind 7 "slot7;css_7"
+bind 8 "slot8;css_8"
+bind 9 "slot9;css_9"
+host_writeconfig
+```
+
+If you do not bind the keys, XPX still supports chat fallback with `!1` through `!9` while a menu is open.
+
 ## Main Commands
+
+![Commands Banner](docs/screenshots/banner-commands.png)
 
 ### Player commands
 
