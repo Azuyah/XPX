@@ -154,6 +154,8 @@ public sealed class XPXLevelsConfig : BasePluginConfig
         new() { Id = "3242420753", Label = "[ARENA 1vs1] am_anubis_p" },
         new() { Id = "3339983232", Label = "Agency" },
         new() { Id = "3395240479", Label = "AIM Map 2" },
+        new() { Id = "3469339086", Label = "aim_map" },
+        new() { Id = "3678786768", Label = "aim_homage" },
         new() { Id = "3329258290", Label = "Basalt" },
         new() { Id = "3075706807", Label = "Biome" },
         new() { Id = "3454386068", Label = "Bonn WIP (Wingman)" },

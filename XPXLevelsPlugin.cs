@@ -30,6 +30,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     }
 
     private const int DefaultBotCount = 10;
+    private const string DefaultGameModeAlias = "casual";
     private const int ReadOnlyLinesPerPage = 4;
     private const int ReadOnlyWrapWidth = 28;
     private const float TransientPanelDurationSeconds = 6.0f;
@@ -91,6 +92,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     private GameTimer? _activeMapVoteTimer;
     private GameTimer? _activeMapVoteReminderTimer;
     private GameTimer? _autosaveTimer;
+    private string _selectedGameModeAlias = DefaultGameModeAlias;
     private string? _transitionSnapshotPath;
     private bool _notificationsEnabled = true;
 
@@ -220,6 +222,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         _repository = new XPXLevelsRepository(ModuleDirectory);
         _repository.Initialize();
         InitializeTransitionSnapshot();
+        _selectedGameModeAlias = ResolveInitialGameModeAlias();
 
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientAuthorized>(OnClientAuthorized);
@@ -780,14 +783,23 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         ResetTransientUiState();
         ResetFeatureRoundState();
         ScheduleOnlinePlayerSyncs();
-        if (_forcedLoadoutModeEnabled)
+        var desiredModeAlias = GetDesiredGameModeAliasForMapChange();
+        if (!string.IsNullOrWhiteSpace(desiredModeAlias))
         {
             AddTimer(1.0f, () =>
             {
-                ApplyDeathmatchModeCommands();
-                ApplyForcedLoadoutServerRules();
-                ReapplyForcedLoadoutToAlivePlayers();
+                ApplyGameModeConVars(desiredModeAlias);
+                if (_forcedLoadoutModeEnabled)
+                {
+                    ApplyForcedLoadoutServerRules();
+                    ReapplyForcedLoadoutToAlivePlayers();
+                }
             }, TimerFlags.STOP_ON_MAPCHANGE);
+        }
+
+        if (_forcedLoadoutModeEnabled)
+        {
+            _selectedGameModeAlias = "deathmatch";
         }
 
         AddTimer(90.0f, ClearTransitionSnapshot, TimerFlags.STOP_ON_MAPCHANGE);
@@ -1232,10 +1244,14 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void RestartCurrentMap(string actorName)
     {
-        var currentMap = Server.MapName;
+        var currentMap = ResolveModeChangeMap(GetDesiredGameModeAliasForMapChange());
         SaveAllPlayerProgress();
         Broadcast("{Gold}" + actorName + "{Default} restarted the current map.");
-        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"changelevel \"{currentMap}\""), TimerFlags.STOP_ON_MAPCHANGE);
+        AddTimer(Config.MapChangeDelaySeconds, () =>
+        {
+            ApplyGameModeConVars(GetDesiredGameModeAliasForMapChange());
+            Server.ExecuteCommand($"changelevel \"{currentMap}\"");
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private void OpenGameModeMenu(CCSPlayerController player)
@@ -1582,9 +1598,11 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void QueueMapChange(ServerMapOption selectedMap)
     {
+        var desiredModeAlias = GetDesiredGameModeAliasForMapChange();
         SaveAllPlayerProgress();
         AddTimer(Config.MapChangeDelaySeconds, () =>
         {
+            ApplyGameModeConVars(desiredModeAlias);
             if (selectedMap.IsWorkshop)
             {
                 Server.ExecuteCommand($"host_workshop_map {selectedMap.CommandTarget}");
@@ -1678,49 +1696,37 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
     private void ApplyGameMode(GameModeOption mode, string actorName)
     {
         _forcedLoadoutModeEnabled = false;
+        _selectedGameModeAlias = NormalizeGameModeAlias(mode.Alias);
         SaveAllPlayerProgress();
-        var nextMap = ResolvePreferredModeMap(mode);
-        Broadcast("{Gold}" + actorName + "{Default} switched the server to {White}" + mode.Label + "{Default}. Loading {White}" + nextMap + "{Default}.");
-        Server.ExecuteCommand($"game_alias {mode.Alias}");
-
-        var (gameType, gameMode, mapGroup) = ResolveModeConVars(mode.Alias);
-        if (gameType is not null)
+        var targetMap = ResolveModeChangeMap(_selectedGameModeAlias);
+        Broadcast("{Gold}" + actorName + "{Default} switched the server to {White}" + mode.Label + "{Default}. Reloading {White}" + targetMap + "{Default}.");
+        AddTimer(Config.MapChangeDelaySeconds, () =>
         {
-            Server.ExecuteCommand($"game_type {gameType.Value}");
-        }
-
-        if (gameMode is not null)
-        {
-            Server.ExecuteCommand($"game_mode {gameMode.Value}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(mapGroup))
-        {
-            Server.ExecuteCommand($"mapgroup {mapGroup}");
-        }
-
-        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{nextMap}\""), TimerFlags.STOP_ON_MAPCHANGE);
+            ApplyGameModeConVars(_selectedGameModeAlias);
+            Server.ExecuteCommand($"changelevel \"{targetMap}\"");
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private void EnableForcedLoadoutMode(ForcedLoadoutType loadout, string actorName, CommandInfo? command = null, CCSPlayerController? actor = null)
     {
         _forcedLoadoutModeEnabled = true;
         _forcedLoadout = loadout;
+        _selectedGameModeAlias = "deathmatch";
         SaveAllPlayerProgress();
-
-        var nextMap = ResolvePreferredModeMap(new GameModeOption
-        {
-            Label = "Deathmatch",
-            Alias = "deathmatch"
-        });
+        var nextMap = ResolveModeChangeMap(_selectedGameModeAlias);
 
         Broadcast("{Gold}" + actorName + "{Default} enabled {White}" + GetForcedLoadoutLabel(loadout) + "{Default} loadout mode for all players.");
-        ApplyDeathmatchModeCommands();
+        ApplyGameModeConVars(_selectedGameModeAlias);
         ApplyForcedLoadoutServerRules();
         ReapplyForcedLoadoutToAlivePlayers();
 
         ReplyLoadoutCommandResult(command, actor, "{Green}Forced loadout is now {White}" + GetForcedLoadoutLabel(loadout) + "{Green} for all players.");
-        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{nextMap}\""), TimerFlags.STOP_ON_MAPCHANGE);
+        AddTimer(Config.MapChangeDelaySeconds, () =>
+        {
+            ApplyGameModeConVars(_selectedGameModeAlias);
+            ApplyForcedLoadoutServerRules();
+            Server.ExecuteCommand($"changelevel \"{nextMap}\"");
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private void DisableForcedLoadoutMode(string actorName, CommandInfo? command = null, CCSPlayerController? actor = null)
@@ -1746,9 +1752,15 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         }
 
         SaveAllPlayerProgress();
+        _selectedGameModeAlias = "deathmatch";
         Broadcast("{Gold}" + actorName + "{Default} disabled forced loadout mode and restored standard Deathmatch.");
-        ApplyDeathmatchModeCommands();
-        AddTimer(Config.MapChangeDelaySeconds, () => Server.ExecuteCommand($"map \"{ResolvePreferredModeMap(new GameModeOption { Label = "Deathmatch", Alias = "deathmatch" })}\""), TimerFlags.STOP_ON_MAPCHANGE);
+        ApplyGameModeConVars(_selectedGameModeAlias);
+        var nextMap = ResolveModeChangeMap(_selectedGameModeAlias);
+        AddTimer(Config.MapChangeDelaySeconds, () =>
+        {
+            ApplyGameModeConVars(_selectedGameModeAlias);
+            Server.ExecuteCommand($"changelevel \"{nextMap}\"");
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private bool TryGetGameMode(string value, out GameModeOption gameMode)
@@ -1809,10 +1821,15 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private string GetCurrentGameModeAlias()
     {
-        var alias = ConVar.Find("game_alias")?.StringValue;
+        if (!string.IsNullOrWhiteSpace(_selectedGameModeAlias))
+        {
+            return _selectedGameModeAlias;
+        }
+
+        var alias = NormalizeGameModeAlias(ConVar.Find("game_alias")?.StringValue);
         if (!string.IsNullOrWhiteSpace(alias))
         {
-            return alias.Trim().ToLowerInvariant();
+            return alias;
         }
 
         if (IsDeathmatchActive(string.Empty))
@@ -1820,7 +1837,7 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
             return "deathmatch";
         }
 
-        return "casual";
+        return DefaultGameModeAlias;
     }
 
     private bool IsFastXpMode(string alias)
@@ -1948,6 +1965,70 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
         }
 
         return (null, null, null);
+    }
+
+    private string ResolveInitialGameModeAlias()
+    {
+        var alias = NormalizeGameModeAlias(ConVar.Find("game_alias")?.StringValue);
+        if (!string.IsNullOrWhiteSpace(alias))
+        {
+            return alias;
+        }
+
+        return IsDeathmatchActive(string.Empty) ? "deathmatch" : DefaultGameModeAlias;
+    }
+
+    private string GetDesiredGameModeAliasForMapChange()
+    {
+        return _forcedLoadoutModeEnabled ? "deathmatch" : GetCurrentGameModeAlias();
+    }
+
+    private string ResolveModeChangeMap(string alias)
+    {
+        var currentMap = Server.MapName?.Trim();
+        if (!string.IsNullOrWhiteSpace(currentMap))
+        {
+            return currentMap;
+        }
+
+        return ResolvePreferredModeMap(new GameModeOption
+        {
+            Label = alias,
+            Alias = alias
+        });
+    }
+
+    private void ApplyGameModeConVars(string alias)
+    {
+        alias = NormalizeGameModeAlias(alias);
+        if (string.IsNullOrWhiteSpace(alias))
+        {
+            return;
+        }
+
+        _selectedGameModeAlias = alias;
+        Server.ExecuteCommand($"game_alias {alias}");
+
+        var (gameType, gameMode, mapGroup) = ResolveModeConVars(alias);
+        if (gameType is not null)
+        {
+            Server.ExecuteCommand($"game_type {gameType.Value}");
+        }
+
+        if (gameMode is not null)
+        {
+            Server.ExecuteCommand($"game_mode {gameMode.Value}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(mapGroup))
+        {
+            Server.ExecuteCommand($"mapgroup {mapGroup}");
+        }
+    }
+
+    private static string NormalizeGameModeAlias(string? alias)
+    {
+        return string.IsNullOrWhiteSpace(alias) ? string.Empty : alias.Trim().ToLowerInvariant();
     }
 
     private void KickPlayer(CCSPlayerController target, string actorName)
@@ -3492,23 +3573,8 @@ public sealed partial class XPXLevelsPlugin : BasePlugin, IPluginConfig<XPXLevel
 
     private void ApplyDeathmatchModeCommands()
     {
-        Server.ExecuteCommand("game_alias deathmatch");
-
-        var (gameType, gameMode, mapGroup) = ResolveModeConVars("deathmatch");
-        if (gameType is not null)
-        {
-            Server.ExecuteCommand($"game_type {gameType.Value}");
-        }
-
-        if (gameMode is not null)
-        {
-            Server.ExecuteCommand($"game_mode {gameMode.Value}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(mapGroup))
-        {
-            Server.ExecuteCommand($"mapgroup {mapGroup}");
-        }
+        _selectedGameModeAlias = "deathmatch";
+        ApplyGameModeConVars(_selectedGameModeAlias);
     }
 
     private void ApplyForcedLoadoutServerRules()
